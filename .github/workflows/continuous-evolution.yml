@@ -1,0 +1,204 @@
+name: 🔄 持续探索自我演进
+
+on:
+  workflow_dispatch:
+    inputs:
+      interval:
+        description: '探索间隔（分钟）'
+        required: false
+        default: '60'
+      max_per_round:
+        description: '每轮最大优化数'
+        required: false
+        default: '5'
+      level:
+        description: '优化级别'
+        required: false
+        default: 'medium'
+        type: choice
+        options:
+          - safe
+          - medium
+          - aggressive
+  schedule:
+    - cron: '30 * * * *'
+
+env:
+  INTERVAL: ${{ github.event.inputs.interval || '60' }}
+  MAX_PER_ROUND: ${{ github.event.inputs.max_per_round || '5' }}
+  OPT_LEVEL: ${{ github.event.inputs.level || 'medium' }}
+
+jobs:
+  continuous_exploration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: 🚀 启动探索引擎
+        run: |
+          echo "🔄 持续探索引擎启动"
+          echo "探索间隔: $INTERVAL 分钟"
+          echo "每轮最大优化: $MAX_PER_ROUND"
+
+      - name: 🔍 扫描代码库
+        run: |
+          mkdir -p exploration-results
+
+          echo "ESLint 扫描..."
+          cd frontend && pnpm install --frozen-lockfile 2>/dev/null || pnpm install 2>/dev/null || true
+          pnpm lint --format json > ../exploration-results/eslint.json 2>/dev/null || echo "[]" > ../exploration-results/eslint.json
+          cd ..
+
+          echo "文件扫描..."
+          find frontend -name "*.ts" -o -name "*.tsx" -o -name "*.vue" | while read f; do
+            lines=$(wc -l < "$f" 2>/dev/null || echo 0)
+            echo "$f:$lines"
+          done | sort -t: -k2 -nr | head -20 > exploration-results/large-files.txt
+
+          echo "扫描完成"
+
+      - name: 🧠 Claude 分析探索结果
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          ANALYSIS=$(cat exploration-results/eslint.json 2>/dev/null || echo "[]")
+          LARGE=$(cat exploration-results/large-files.txt 2>/dev/null || echo "")
+
+          claude --print \
+            --model opus \
+            --max-tokens 8000 \
+            --dangerously-set-env-vars \
+            --prompt "你是代码探索分析师。分析以下扫描结果，识别值得优化的问题。
+
+ESLint 结果: $ANALYSIS
+大文件: $LARGE
+
+任务:
+1. 分析 ESLint 错误和警告，按严重程度排序
+2. 识别超大文件（>500行）
+3. 只输出真正值得优化的高优先级问题
+4. 过滤掉低价值问题（如 import 顺序、注释等）
+
+输出纯 JSON（无 markdown）:
+{
+  \"issues\": [
+    {\"priority\": \"P0-P3\", \"file\": \"文件路径\", \"desc\": \"问题描述\", \"effort\": \"low/med/high\"}
+  ],
+  \"total\": 总数,
+  \"high_priority\": 高优先级数量
+}" > exploration-results/analysis.md 2>/dev/null || echo '{"issues":[],"total":0,"high_priority":0}' > exploration-results/analysis.md
+
+      - name: 🔄 判断
+        id: decide
+        run: |
+          ISSUES=$(cat exploration-results/analysis.md | grep -o '"total":[0-9]*' | head -1 | cut -d: -f2 || echo 0)
+          echo "发现问题: $ISSUES"
+
+          if [ "$ISSUES" = "0" ] || [ -z "$ISSUES" ]; then
+            echo "没有发现问题，进入休眠"
+            echo "should_continue=false" >> $GITHUB_OUTPUT
+          else
+            echo "有 $ISSUES 个问题，继续优化"
+            echo "should_continue=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: ⚡ 优化循环
+        if: steps.decide.outputs.should_continue == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd frontend
+          pnpm install --frozen-lockfile 2>/dev/null || pnpm install 2>/dev/null || true
+          cd ..
+
+          ITER=0
+          MAX=$MAX_PER_ROUND
+
+          while [ $ITER -lt $MAX ]; do
+            ITER=$((ITER + 1))
+
+            FILE=$(cat exploration-results/analysis.md | grep -oP '"file"\s*:\s*"\K[^"]+' | head -1 || echo "")
+            DESC=$(cat exploration-results/analysis.md | grep -oP '"desc"\s*:\s*"\K[^"]+' | head -1 || echo "")
+            PRIORITY=$(cat exploration-results/analysis.md | grep -oP '"priority"\s*:\s*"\K[^"]+' | head -1 || echo "P2")
+
+            if [ -z "$FILE" ]; then
+              echo "没有更多问题，退出"
+              break
+            fi
+
+            echo "优化 [$ITER/$MAX]: [$PRIORITY] $FILE"
+            echo "描述: $DESC"
+
+            claude --print \
+              --model opus \
+              --max-tokens 4000 \
+              --dangerously-set-env-vars \
+              --prompt "优化这个问题:
+- 文件: $FILE
+- 描述: $DESC
+- 级别: $OPT_LEVEL
+
+要求:
+1. 直接修改代码，不要只输出建议
+2. 确保修改后代码能正常编译
+3. 遵守 $OPT_LEVEL 级别（safe=只做安全和小修复，medium=加性能优化，aggressive=可重构）
+
+只输出你修改的内容摘要（1-2句话），不要解释过程。" > /tmp/result.txt 2>/dev/null || echo "Claude 调用失败" > /tmp/result.txt
+
+            RESULT=$(cat /tmp/result.txt)
+            echo "优化结果: $RESULT"
+
+            # 验证
+            cd frontend && pnpm build > /tmp/build.txt 2>&1 && BUILD_OK=true || BUILD_OK=false && cd ..
+
+            if [ "$BUILD_OK" = "true" ]; then
+              git add -A
+              if git diff --cached --stat | grep -q .; then
+                git commit -m "🔄 优化 [$PRIORITY]: $(basename $FILE)"
+                git push
+                echo "✅ 提交成功"
+              else
+                echo "没有变更，跳过提交"
+              fi
+            else
+              echo "⚠️ 构建失败，回滚"
+              git checkout -- .
+              cat /tmp/build.txt | tail -10
+            fi
+
+            # 移除已处理问题（简化处理）
+            sed -i '/"file":\s*"'"$FILE"'"/d' exploration-results/analysis.md 2>/dev/null || true
+          done
+
+      - name: 💾 记录历史
+        if: always()
+        run: |
+          mkdir -p evolution-history
+
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          ISSUES=$(cat exploration-results/analysis.md | grep -o '"total":[0-9]*' | head -1 | cut -d: -f2 || echo 0)
+          CONTINUED=${{ steps.decide.outputs.should_continue }}
+
+          echo "{\"timestamp\":\"$TIMESTAMP\",\"issues\":$ISSUES,\"continued\":$CONTINUED}" >> evolution-history/stats.jsonl
+
+          git add evolution-history/
+          git commit -m "📊 探索记录 $(date +%Y-%m-%d\ %H:%M)" || true
+          git push || true
+
+          echo "✅ 探索完成"
