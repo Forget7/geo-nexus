@@ -1,0 +1,59 @@
+# 模型配置
+# 支持的模型列表，通过 litellm 统一调用
+
+models:
+  # OpenAI 系列
+  openai:
+    - gpt-4o
+    - gpt-4-turbo
+    - gpt-4
+    - gpt-3.5-turbo
+  
+  # Anthropic 系列
+  anthropic:
+    - claude-3-5-sonnet-latest
+    - claude-3-opus-latest
+    - claude-3-sonnet-latest
+    - claude-3-haiku-latest
+  
+  # Google 系列
+  google:
+    - gemini-1.5-pro
+    - gemini-1.5-flash
+    - gemini-1.0-pro
+  
+  # Meta (Llama)
+  meta:
+    - llama-3-70b-instruct
+    - llama-3-8b-instruct
+    - llama-2-70b-chat
+  
+  # 本地/Ollama
+  ollama:
+    - ollama/llama3
+    - ollama/mistral
+    - ollama/qwen2
+    - ollama/codellama
+    - ollama/gemma
+  
+  # 开源HuggingFace
+  huggingface:
+    - huggingface/mistralai/Mistral-7B-Instruct-v0.2
+    - huggingface/meta-llama/Llama-2-7b-chat-hf
+  
+  # Azure OpenAI
+  azure:
+    - azure/gpt-4
+    - azure/gpt-35-turbo
+
+# 默认模型
+default_model: gpt-4o
+
+# API Keys (通过环境变量设置)
+# OPENAI_API_KEY=sk-xxx
+# ANTHROPIC_API_KEY=sk-ant-xxx
+# GOOGLE_API_KEY=xxx
+
+# 本地Ollama配置
+ollama:
+  base_url: http://localhost:11434

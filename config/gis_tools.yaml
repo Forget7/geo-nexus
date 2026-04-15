@@ -1,0 +1,74 @@
+# GIS工具配置
+
+# 常用坐标系
+coordinate_systems:
+  wgs84:
+    epsg: 4326
+    name: "WGS 84"
+    type: "geographic"
+  web_mercator:
+    epsg: 3857
+    name: "Web Mercator"
+    type: "projected"
+  china_2000:
+    epsg: 4490
+    name: "China Geodetic Coordinate System 2000"
+    type: "geographic"
+  utm_50n:
+    epsg: 32650
+    name: "UTM Zone 50N"
+    type: "projected"
+
+# 地图样式预设
+map_styles:
+  default:
+    fill_color: "#2563EB"
+    stroke_color: "#1E40AF"
+    stroke_width: 2
+    opacity: 0.7
+  
+  highlight:
+    fill_color: "#F59E0B"
+    stroke_color: "#D97706"
+    stroke_width: 3
+    opacity: 0.9
+  
+  heatmap:
+    color_range: ["blue", "cyan", "lime", "yellow", "red"]
+    intensity_range: [0, 1]
+
+# 数据格式配置
+supported_formats:
+  input:
+    - GeoJSON
+    - Shapefile (.shp)
+    - KML
+    - GML
+    - GPX
+    - CSV (带经纬度)
+    - GeoTIFF
+  
+  output:
+    - GeoJSON
+    - Shapefile
+    - KML
+    - GeoPackage
+    - GeoTIFF
+
+# OSM数据标签过滤
+osm_tags:
+  hospital:
+    amenity: "hospital"
+  school:
+    amenity: "school"
+  restaurant:
+    amenity: "restaurant"
+  bank:
+    amenity: "bank"
+  gas_station:
+    amenity: "fuel"
+  park:
+    leisure: "park"
+  lake:
+    natural: "water"
+    water: "lake"

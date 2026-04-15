@@ -1,0 +1,182 @@
+# GeoNexus 数字GIS专家系统 - Docker部署
+
+version: '3.8'
+
+services:
+  # ========== Backend (Java Spring Boot) ==========
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: geonexus-api
+    ports:
+      - "8000:8000"
+    environment:
+      # API Keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CESIUM_ION_TOKEN=${CESIUM_ION_TOKEN}
+      # Database
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/geonexus
+      - SPRING_DATASOURCE_USERNAME=geonexus
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-geonexus123}
+      # Redis
+      - SPRING_DATA_REDIS_HOST=cache
+      - SPRING_DATA_REDIS_PORT=6379
+      # GeoServer
+      - GEOSERVER_URL=http://geoserver:8080/geoserver
+      - GEOSERVER_USERNAME=admin
+      - GEOSERVER_PASSWORD=${GEOSERVER_PASSWORD:-geoserver}
+      # Kafka
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - cache
+      - geoserver
+      - kafka
+    networks:
+      - geonexus-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========== Frontend (Vue) ==========
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: geonexus-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_URL=http://api:8000
+    depends_on:
+      - api
+    networks:
+      - geonexus-network
+    restart: unless-stopped
+
+  # ========== GeoServer ==========
+  geoserver:
+    image: docker.osgeo.org/geoserver:2.25.0
+    container_name: geonexus-geoserver
+    ports:
+      - "8080:8080"
+    environment:
+      - GEOWEBCACHE_CACHE_DIR=/opt/geoserver/data/gwc
+      - GEOSERVER_DATA_DIR=/opt/geoserver/data
+    volumes:
+      - geoserver-data:/opt/geoserver/data
+      - geoserver-gwc:/opt/geoserver/data/gwc
+    networks:
+      - geonexus-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/geoserver/rest/about/version.json || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ========== PostgreSQL + PostGIS ==========
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: geonexus-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=geonexus
+      - POSTGRES_USER=geonexus
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-geonexus123}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - geonexus-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geonexus -d geonexus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== Redis ==========
+  cache:
+    image: redis:7-alpine
+    container_name: geonexus-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - geonexus-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== MinIO ==========
+  minio:
+    image: minio/minio:latest
+    container_name: geonexus-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=geonexus
+      - MINIO_ROOT_PASSWORD=${MINIO_PASSWORD:-geonexus123}
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - geonexus-network
+    restart: unless-stopped
+
+  # ========== Kafka (KRaft 模式，无需 Zookeeper) ==========
+  kafka:
+    image: apache/kafka-native:3.7.0
+    container_name: geonexus-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft 模式配置
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_NODE_ID=1
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_LOG_DIRS=/var/lib/kafka/logs
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - CLUSTER_ID=geonexus-kafka-cluster
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - geonexus-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  geonexus-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  geoserver-data:
+  geoserver-gwc:
+  kafka-data:

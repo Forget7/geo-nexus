@@ -1,0 +1,348 @@
+spring:
+  application:
+    name: geonexus
+  
+  # ========== PostgreSQL ==========
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:geonexus}
+    username: ${DB_USER:geonexus}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    
+    # HikariCP连接池优化
+    hikari:
+      # 连接池大小
+      minimum-idle: ${HIKARI_MIN_IDLE:5}
+      maximum-pool-size: ${HIKARI_MAX_POOL:20}
+      # 连接空闲超时
+      idle-timeout: ${HIKARI_IDLE_TIMEOUT:300000} # 5分钟
+      # 连接最大生命周期
+      max-lifetime: ${HIKARI_MAX_LIFETIME:1800000} # 30分钟
+      # 连接超时
+      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT:30000} # 30秒
+      # 连接测试查询
+      connection-test-query: SELECT 1
+      # 连接泄漏检测
+      leak-detection-threshold: ${HIKARI_LEAK_DETECTION:60000} # 60秒
+      # 池名称
+      pool-name: GeoNexus-HikariPool-${random.uuid}
+      # 等待队列容量
+      # adapter: org.postgresql.Driver
+    
+    # JPA配置
+    jpa:
+      hibernate:
+        ddl-auto: ${JPA_DDL_AUTO:validate}
+      show-sql: ${JPA_SHOW_SQL:false}
+      properties:
+        hibernate:
+          format_sql: ${HIBERNATE_FORMAT_SQL:true}
+          use_sql_comments: ${HIBERNATE_SQL_COMMENTS:true}
+          jdbc:
+            # 批量插入优化
+            batch_size: ${HIBERNATE_BATCH_SIZE:50}
+            batch_versioned_data: true
+            # 批处理_order_inserts
+            order_inserts: true
+            order_updates: true
+          # 二级缓存
+          cache:
+            use_second_level_cache: ${HIBERNATE_L2CACHE:true}
+            use_query_cache: ${HIBERNATE_QUERY_CACHE:true}
+            region.factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+          # 自动建表
+          hbm2ddl:
+            auto: ${JPA_DDL_AUTO:validate}
+          # 方言
+          dialect: org.hibernate.dialect.PostgreSQLDialect
+          # 统计
+          generate_statistics: ${HIBERNATE_STATS:false}
+  
+  # ========== Redis ==========
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DB:0}
+      timeout: ${REDIS_TIMEOUT:5000}ms
+      lettuce:
+        pool:
+          enabled: true
+          min-idle: ${REDIS_MIN_IDLE:2}
+          max-idle: ${REDIS_MAX_IDLE:8}
+          max-active: ${REDIS_MAX_ACTIVE:16}
+          max-wait: ${REDIS_MAX_WAIT:3000}ms
+        shutdown-timeout: 100ms
+        # 集群配置（注释掉，如需启用取消注释）
+        # cluster:
+        #   nodes: ${REDIS_CLUSTER_NODES:}
+        #   max-redirects: 3
+      # 缓存配置
+      cache:
+        type: redis
+        redis:
+          time-to-live: ${REDIS_CACHE_TTL:3600000} # 默认1小时
+          cache-null-values: false
+  
+  # ========== Async ==========
+  task:
+    execution:
+      pool:
+        core-size: ${ASYNC_CORE_POOL:4}
+        max-size: ${ASYNC_MAX_POOL:16}
+        queue-capacity: ${ASYNC_QUEUE_CAP:100}
+        keep-alive: ${ASYNC_KEEP_ALIVE:60}s
+      thread-name-prefix: geonexus-async-
+      await-termination: true
+      termination-timeout: ${ASYNC_TERMINATION_TIMEOUT:60}s
+  
+  # ========== Servlet ==========
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: ${UPLOAD_MAX_FILE:100}MB
+      max-request-size: ${UPLOAD_MAX_REQUEST:500}MB
+      file-size-threshold: 2KB
+      location: ${UPLOAD_TEMP_DIR:/tmp/geonexus}
+  
+  # ========== Jackson ==========
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      indent-output: true
+      fail-on-empty-beans: false
+    deserialization:
+      fail-on-unknown-properties: false
+      unwrap-single-value-arrays: true
+    default-property-inclusion: non_null
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+# ========== Server ==========
+server:
+  port: ${SERVER_PORT:8000}
+  servlet:
+    context-path: ${SERVER_CONTEXT_PATH:/}
+    session:
+      timeout: ${SERVER_SESSION_TIMEOUT:30m}
+      cookie:
+        http-only: true
+        secure: ${SERVER_COOKIE_SECURE:false}
+        same-site: lax
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript
+    min-response-size: 1024B
+  error:
+    include-message: never  # Never expose error details to clients
+    include-binding-errors: never
+    include-stacktrace: never  # Never expose stack traces in production
+    include-exception: never
+
+# ========== Logging ==========
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.geonexus: ${LOG_LEVEL_APP:DEBUG}
+    org.springframework: ${LOG_LEVEL_SPRING:WARN}
+    org.hibernate: ${LOG_LEVEL_HIBERNATE:WARN}
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.apache: WARN
+    org.apache.catalina: INFO
+    com.zaxxer.hikari: ${LOG_LEVEL_HIKARI:INFO}
+  
+  pattern:
+    console: "${LOG_PATTERN_CONSOLE:%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n}"
+    file: "${LOG_PATTERN_FILE:%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n}"
+  
+  file:
+    name: ${LOG_FILE_PATH:${LOG_PATH:logs}/geonexus.log}
+    max-size: ${LOG_FILE_MAX_SIZE:100MB}
+    max-history: ${LOG_FILE_MAX_HISTORY:30}
+    total-size-cap: ${LOG_FILE_TOTAL_SIZE:3GB}
+
+# ========== Actuator ==========
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,logfile
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles:
+        http.server.requests: 0.5,0.9,0.95,0.99
+      percentiles-histogram:
+        http.server.requests: true
+
+# ========== OpenAPI ==========
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+
+# ========== GeoServer ==========
+geoserver:
+  url: ${GEOSERVER_URL:http://localhost:8080/geoserver}
+  username: ${GEOSERVER_USERNAME:admin}
+  password: ${GEOSERVER_PASSWORD}
+  workspace: ${GEOSERVER_WORKSPACE:geonexus}
+  timeout: ${GEOSERVER_TIMEOUT:30000}
+
+# ========== LLM Providers ==========
+llm:
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: https://api.openai.com
+    timeout: ${OPENAI_TIMEOUT:120000}
+  anthropic:
+    api-key: ${ANTHROPIC_API_KEY:}
+    base-url: https://api.anthropic.com
+    timeout: ${ANTHROPIC_TIMEOUT:120000}
+  google:
+    api-key: ${GOOGLE_API_KEY:}
+    base-url: https://generativelanguage.googleapis.com
+    timeout: ${GOOGLE_TIMEOUT:120000}
+  ollama:
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    timeout: ${OLLAMA_TIMEOUT:300000}
+
+# ========== DataSource (External GIS Services) ==========
+geonexus:
+  datasource:
+    services:
+      geoserver:
+        name: GeoServer
+        type: geoserver
+        url: ${GEOSERVER_REST_URL:http://localhost:8080/geoserver/rest}
+        capabilities:
+          - wms
+          - wfs
+          - wmts
+          - csw
+        enabled: true
+      supermap:
+        name: SuperMap iServer
+        type: supermap
+        url: ${SUPERMAP_URL:http://localhost:8090/iserver}
+        capabilities:
+          - wms
+          - wfs
+          - rest
+        enabled: true
+      arcgis:
+        name: ArcGIS Server
+        type: arcgis
+        url: ${ARCGIS_ADMIN_URL:http://localhost:6080/arcgis/admin}
+        capabilities:
+          - wms
+          - wfs
+          - rest
+          - map
+        enabled: true
+      postgis:
+        name: PostGIS Database
+        type: postgis
+        url: ${POSTGIS_URL:jdbc:postgresql://localhost:5432/gis}
+        capabilities:
+          - vector
+          - raster
+          - routing
+        enabled: true
+
+  llm:
+    api-key: ${LLM_API_KEY:${OPENAI_API_KEY:}}
+    base-url: ${LLM_BASE_URL:}
+    default-model: ${LLM_DEFAULT_MODEL:gpt-4o}
+    fallback-model: ${LLM_FALLBACK_MODEL:gpt-3.5-turbo}
+    timeout: ${LLM_TIMEOUT:60s}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:geonexus-group}
+    topics:
+      geo-events: geonexus.geo-events
+      trajectory: geonexus.trajectory
+      czml: geonexus.czml
+      alerts: geonexus.alerts
+      analytics: geonexus.analytics
+
+# ========== Resilience4j ==========
+resilience4j:
+  circuitbreaker:
+    instances:
+      llm:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+        recordExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+  retry:
+    instances:
+      llm:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientResponseException$ServiceUnavailable
+          - org.springframework.web.reactive.function.client.WebClientResponseException$GatewayTimeout
+
+# ========== JWT ==========
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:3600000}       # 1 hour (was 24h)
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}  # 7 days
+
+# ========== OpenTelemetry ==========
+otel:
+  service:
+    name: geonexus-api
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+  traces:
+    exporter: otlp
+  metrics:
+    exporter: otlp
+  logs:
+    exporter: otlp
+
+# ========== CORS ==========
+cors:
+  allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:8080}
+  allowed-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+  allowed-headers: "*"
+  exposed-headers: X-Request-ID,X-Rate-Limit-Remaining
+  allow-credentials: true
+  max-age: 3600

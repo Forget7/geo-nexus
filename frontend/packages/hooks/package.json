@@ -1,0 +1,16 @@
+{
+  "name": "@geonex/hooks",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./useMap": "./src/useMap.ts",
+    "./useCesium": "./src/useCesium.ts",
+    "./useApi": "./src/useApi.ts"
+  },
+  "dependencies": {
+    "vue": "^3.4.15",
+    "@geonex/types": "workspace:*"
+  }
+}

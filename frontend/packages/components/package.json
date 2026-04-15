@@ -1,0 +1,17 @@
+{
+  "name": "@geonex/components",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./map": "./src/map/index.ts",
+    "./chat": "./src/chat/index.ts",
+    "./common": "./src/common/index.ts"
+  },
+  "dependencies": {
+    "vue": "^3.4.15",
+    "element-plus": "^2.5.4",
+    "@element-plus/icons-vue": "^2.3.1"
+  }
+}

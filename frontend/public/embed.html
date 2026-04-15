@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoNexus Map Embed</title>
+    
+    <!-- OpenLayers CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@8.2.0/ol.css">
+    
+    <!-- Cesium CSS -->
+    <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        #map-container {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* 加载状态 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #1e293b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+            transition: opacity 0.3s;
+        }
+        
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* 错误状态 */
+        .error-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #1e293b;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+            text-align: center;
+            padding: 2rem;
+        }
+        
+        .error-overlay.visible {
+            display: flex;
+        }
+        
+        .error-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        
+        .error-overlay h2 {
+            margin-bottom: 0.5rem;
+        }
+        
+        .error-overlay p {
+            color: #94a3b8;
+        }
+        
+        /* 工具栏 */
+        .embed-toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 48px;
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1rem;
+            z-index: 1000;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .toolbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: white;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        
+        .toolbar-title {
+            color: #94a3b8;
+            font-size: 0.875rem;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .toolbar-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .toolbar-btn {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background 0.2s;
+        }
+        
+        .toolbar-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        /* OpenLayers地图 */
+        #ol-map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Cesium地图 */
+        #cesium-map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* 2D/3D切换 */
+        .map-mode-toggle {
+            display: flex;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        
+        .map-mode-toggle button {
+            padding: 0.375rem 0.75rem;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .map-mode-toggle button.active {
+            background: #2563eb;
+            color: white;
+        }
+        
+        /* 响应式 */
+        @media (max-width: 600px) {
+            .toolbar-title {
+                display: none;
+            }
+            
+            .embed-toolbar {
+                padding: 0 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 加载遮罩 -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>加载地图中...</p>
+    </div>
+    
+    <!-- 错误遮罩 -->
+    <div id="error-overlay" class="error-overlay">
+        <div class="error-icon">❌</div>
+        <h2 id="error-title">加载失败</h2>
+        <p id="error-message">地图不存在或已过期</p>
+    </div>
+    
+    <!-- 工具栏 -->
+    <div id="toolbar" class="embed-toolbar" style="display: none;">
+        <div class="toolbar-brand">
+            <span>🌐</span>
+            <span>GeoNexus</span>
+        </div>
+        
+        <span id="map-title" class="toolbar-title"></span>
+        
+        <div class="toolbar-actions">
+            <div class="map-mode-toggle">
+                <button id="btn-2d" class="active" onclick="switchMode('2d')">2D</button>
+                <button id="btn-3d" onclick="switchMode('3d')">3D</button>
+            </div>
+            
+            <button class="toolbar-btn" onclick="toggleFullscreen()" title="全屏">
+                ⛶
+            </button>
+            
+            <button class="toolbar-btn" onclick="openInGeoNexus()" title="在新窗口打开">
+                🔗
+            </button>
+        </div>
+    </div>
+    
+    <!-- 地图容器 -->
+    <div id="map-container">
+        <!-- OpenLayers 2D -->
+        <div id="ol-map" style="display: none;"></div>
+        
+        <!-- Cesium 3D -->
+        <div id="cesium-map" style="display: none;"></div>
+    </div>
+    
+    <!-- 依赖库 -->
+    <script src="https://cdn.jsdelivr.net/npm/ol@8.2.0/dist/ol.js"></script>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    
+    <script>
+        // ========== 配置 ==========
+        const CONFIG = {
+            apiBase: 'https://api.geoagent.ai',
+            cesiumIonToken: 'YOUR_CESIUM_ION_TOKEN'
+        };
+        
+        // ========== 状态 ==========
+        let currentMode = '2d';
+        let mapData = null;
+        let olMap = null;
+        let cesiumViewer = null;
+        
+        // ========== 初始化 ==========
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 获取分享ID
+            const urlParams = new URLSearchParams(window.location.search);
+            const shareId = urlParams.get('id') || window.location.pathname.split('/').pop();
+            const token = urlParams.get('token');
+            
+            if (!shareId) {
+                showError('无效的链接', '缺少地图ID');
+                return;
+            }
+            
+            try {
+                // 加载地图数据
+                await loadMapData(shareId, token);
+                
+                // 初始化地图
+                initializeMap();
+                
+                // 隐藏加载遮罩
+                document.getElementById('loading-overlay').classList.add('hidden');
+                document.getElementById('toolbar').style.display = 'flex';
+                
+            } catch (error) {
+                console.error('Failed to load map:', error);
+                showError('加载失败', error.message || '地图不存在或已过期');
+            }
+        });
+        
+        // ========== 加载地图数据 ==========
+        async function loadMapData(shareId, token) {
+            const url = `${CONFIG.apiBase}/api/v1/publish/${shareId}${token ? '?token=' + token : ''}`;
+            
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error('地图不存在或已被删除');
+                } else if (response.status === 410) {
+                    throw new Error('此分享已过期');
+                } else if (response.status === 403) {
+                    throw new Error('无权访问此地图');
+                } else {
+                    throw new Error('加载失败');
+                }
+            }
+            
+            mapData = await response.json();
+            
+            // 更新标题
+            document.getElementById('map-title').textContent = mapData.name || '共享地图';
+            document.title = mapData.name ? `${mapData.name} - GeoNexus` : 'GeoNexus Map';
+        }
+        
+        // ========== 初始化地图 ==========
+        function initializeMap() {
+            // 检查是否有显示控制栏的选项
+            const showControls = mapData.embedOptions?.showControls !== false;
+            
+            if (showControls) {
+                document.getElementById('toolbar').style.display = 'flex';
+            }
+            
+            // 初始化2D地图
+            initOpenLayers();
+            
+            // 如果是3D地图或OGC服务，初始化Cesium
+            if (mapData.mode === '3d' || mapData.publishType === 'ogc') {
+                // 默认3D
+                switchMode('3d');
+            }
+        }
+        
+        // ========== OpenLayers 2D地图 ==========
+        function initOpenLayers() {
+            const container = document.getElementById('ol-map');
+            
+            // 底图图层
+            const baseLayer = new ol.layer.Tile({
+                source: new ol.source.OSM()
+            });
+            
+            // 矢量图层（如果提供GeoJSON）
+            const vectorLayers = [];
+            if (mapData.geoJson) {
+                const vectorSource = new ol.source.Vector({
+                    features: new ol.format.GeoJSON().readFeatures(mapData.geoJson)
+                });
+                
+                vectorLayers.push(new ol.layer.Vector({
+                    source: vectorSource,
+                    style: new ol.style.Style({
+                        fill: new ol.style.Fill({ color: 'rgba(37, 99, 235, 0.3)' }),
+                        stroke: new ol.style.Stroke({ color: '#1E40AF', width: 2 }),
+                        point: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({ color: '#2563EB' }) })
+                    })
+                }));
+            }
+            
+            // 创建地图
+            olMap = new ol.Map({
+                target: container,
+                layers: [baseLayer, ...vectorLayers],
+                view: new ol.View({
+                    center: ol.proj.fromLonLat([116.4, 39.9]),
+                    zoom: 10
+                }),
+                controls: showControls ? ol.control.defaults.defaults().extend([
+                    new ol.control.ScaleLine(),
+                    new ol.control.FullScreen()
+                ]) : []
+            });
+        }
+        
+        // ========== Cesium 3D地图 ==========
+        async function initCesium() {
+            // 等待Cesium加载
+            if (typeof Cesium === 'undefined') {
+                console.error('Cesium not loaded');
+                return;
+            }
+            
+            const container = document.getElementById('cesium-map');
+            
+            // 配置Cesium Ion
+            Cesium.Ion.defaultAccessToken = CONFIG.cesiumIonToken;
+            
+            // 创建viewer
+            cesiumViewer = new Cesium.Viewer(container, {
+                terrainProvider: await Cesium.CesiumTerrainProvider.fromIonAssetId(1),
+                baseLayerPicker: false,
+                geocoder: false,
+                homeButton: false,
+                sceneModePicker: false,
+                navigationHelpButton: false,
+                animation: false,
+                timeline: false,
+                fullscreenButton: false,
+                vrButton: false,
+                infoBox: true,
+                selectionIndicator: true
+            });
+            
+            // 如果有GeoJSON数据，添加实体
+            if (mapData.geoJson) {
+                const dataSource = await Cesium.GeoJsonDataSource.load(mapData.geoJson, {
+                    stroke: Cesium.Color.fromCssColorString('#1E40AF'),
+                    fill: Cesium.Color.fromCssColorString('rgba(37, 99, 235, 0.3)'),
+                    strokeWidth: 2,
+                    markerColor: Cesium.Color.RED,
+                    markerSize: 8
+                });
+                
+                cesiumViewer.dataSources.add(dataSource);
+                
+                // 飞到数据范围
+                cesiumViewer.flyTo(dataSource);
+            }
+            
+            // 如果是OGC服务，添加WMS图层
+            if (mapData.publishType === 'ogc' && mapData.wmsUrl) {
+                // 添加WMS imagery provider
+                const wmsProvider = new Cesium.WebMapServiceImageryProvider({
+                    url: mapData.wmsUrl,
+                    layers: mapData.layerName,
+                    parameters: {
+                        transparent: true,
+                        format: 'image/png'
+                    }
+                });
+                
+                cesiumViewer.imageryLayers.addImageryProvider(wmsProvider);
+            }
+        }
+        
+        // ========== 模式切换 ==========
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            const olMapEl = document.getElementById('ol-map');
+            const cesiumMapEl = document.getElementById('cesium-map');
+            const btn2d = document.getElementById('btn-2d');
+            const btn3d = document.getElementById('btn-3d');
+            
+            if (mode === '2d') {
+                // 切换到2D
+                olMapEl.style.display = 'block';
+                cesiumMapEl.style.display = 'none';
+                cesiumMapEl.style.visibility = 'hidden';
+                btn2d.classList.add('active');
+                btn3d.classList.remove('active');
+                
+                // 调整OpenLayers地图大小
+                if (olMap) {
+                    olMap.updateSize();
+                }
+                
+            } else {
+                // 切换到3D
+                olMapEl.style.display = 'none';
+                cesiumMapEl.style.display = 'block';
+                cesiumMapEl.style.visibility = 'visible';
+                btn2d.classList.remove('active');
+                btn3d.classList.add('active');
+                
+                // 初始化Cesium（如果还没初始化）
+                if (!cesiumViewer) {
+                    initCesium();
+                }
+            }
+        }
+        
+        // ========== 全屏切换 ==========
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        // ========== 在GeoNexus中打开 ==========
+        function openInGeoNexus() {
+            window.open(`https://geoagent.ai/map/${mapData.shareId}`, '_blank');
+        }
+        
+        // ========== 错误显示 ==========
+        function showError(title, message) {
+            document.getElementById('loading-overlay').classList.add('hidden');
+            document.getElementById('error-title').textContent = title;
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-overlay').classList.add('visible');
+        }
+        
+        // ========== URL参数解析 ==========
+        function getUrlParam(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+    </script>
+</body>
+</html>
