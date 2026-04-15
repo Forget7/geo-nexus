@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useChatStore } from '../../packages/stores/src/chat'
-import ChatPanel from '../../../packages/components/src/chat/ChatPanel.vue'
-import MapView from '../../../packages/components/src/map/MapView.vue'
+import { useChatStore } from '@geonex/stores'
+import { ChatPanel, MapView } from '@geonex/components/map'
 
 const chatStore = useChatStore()
 const route = useRoute()

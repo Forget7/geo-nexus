@@ -6,7 +6,7 @@
 
 import { ref, computed } from 'vue'
 import { api } from '../../../src/api/client'
-import { useClipboard } from '../../../packages/hooks/src/useClipboard'
+import { useClipboard } from '@geonex/hooks/useClipboard'
 import UnifiedMapPanel from './UnifiedMapPanel.vue'
 
 const props = defineProps<{

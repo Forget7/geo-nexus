@@ -31,7 +31,7 @@ export const useChatStore = defineStore('chat', () => {
   const wsReconnecting = ref(false)
   let wsSocket: WebSocket | null = null
   let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
-  const WS_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/^http/, 'ws') + '/ws/v1/chat'
+  const WS_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/^https?/, 'ws') + '/ws/v1/chat'
   
   // Getters
   const hasMessages = computed(() => messages.value.length > 0)

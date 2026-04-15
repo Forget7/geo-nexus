@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import MapViewComponent from '../../../packages/components/src/map/MapView.vue'
-import OfflineDownloader from '../../../packages/components/src/map/OfflineDownloader.vue'
+import { MapView as MapViewComponent, OfflineDownloader } from '@geonex/components/map'
 
 const mapMode = ref<'2d' | '3d'>('2d')
 const tileType = ref('osm')

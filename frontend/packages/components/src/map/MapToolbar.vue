@@ -6,7 +6,7 @@
 
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useMap } from '../../../packages/hooks/src/useMap'
+import { useMap } from '@geonex/hooks/useMap'
 import SldEditor from './SldEditor.vue'
 
 const props = defineProps<{

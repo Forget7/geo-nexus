@@ -6,12 +6,12 @@
 
 import { ref, shallowRef, onMounted, computed, watch } from 'vue'
 import { useOpenLayers } from './OpenLayersMap'
-import { EffectManager } from '../../../packages/hooks/src/useCesium'
+import { EffectManager } from '@geonex/hooks/useCesium'
 import { 
   MapSyncManager, 
   UnifiedMapState, 
   CoordinateConverter 
-} from '../../../packages/hooks/src/useMapSync'
+} from '@geonex/hooks/useMapSync'
 import type { Viewer } from 'cesium'
 import * as Cesium from 'cesium'
 

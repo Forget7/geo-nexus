@@ -7,7 +7,7 @@
 import { ref, shallowRef, onMounted } from 'vue'
 import CesiumView from './CesiumView.vue'
 import type { Viewer } from 'cesium'
-import type { EffectManager } from '../../../packages/hooks/src/useCesium'
+import type { EffectManager } from '@geonex/hooks/useCesium'
 
 const emit = defineEmits<{
   (e: 'ready', viewer: Viewer): void

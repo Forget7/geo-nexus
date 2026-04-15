@@ -1,4 +1,6 @@
-import { api } from '@/api'
+import { createRequest } from '@geonex/utils'
+
+const api = createRequest({ baseURL: '/api/v1', timeout: 30000 })
 
 const BASE_URL = '/api/v1'
 

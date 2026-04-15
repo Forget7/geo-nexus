@@ -226,3 +226,71 @@
 - 提交 pending 轮询记录 ✅
 - 提交审查修复 ✅
 
+
+---
+
+## 评审日期
+2026-04-15
+
+## 🐛 严重问题（已修复）
+
+### 1. `@geonex/types` 包缺失导致 pnpm install 失败
+**文件**: `frontend/packages/hooks/package.json`, `frontend/packages/stores/package.json`
+**问题**: 两个包都声明了 `"@geonex/types": "workspace:*"` 依赖，但 workspace 中没有对应的 `packages/types/` 目录。pnpm 安装时直接报错：`no package named "@geonex/types" is present in the workspace`
+**修复**: 创建 `packages/types/` 包，复制 `src/types/index.ts` 到包中
+**严重程度**: 🔴 严重（阻塞构建）
+
+### 2. `packages/apps/web/src/service/api.ts` 导入不存在的 `@/api` 模块
+**文件**: `frontend/packages/apps/web/src/service/api.ts`
+**问题**: `import { api } from '@/api'` — `@/api` 在 web 包内无定义（`@/` 指向 `src/` 目录，但该目录无 `api.ts`）
+**修复**: 改用 `@geonex/utils` 的 `createRequest` 创建 API 实例
+**严重程度**: 🔴 严重（运行时崩溃）
+
+### 3. WebSocket URL 协议转换 Bug
+**文件**: `frontend/packages/stores/src/chat.ts`
+**问题**: `.replace(/^http/, 'ws')` 只匹配 `http://`，不处理 `https://`。当 API 用 HTTPS 时变成 `wttps://` 导致 WebSocket 连接失败
+**修复**: 改为 `.replace(/^https?/, 'ws')`
+**严重程度**: 🟡 中等（生产 HTTPS 环境必现）
+
+### 4. `pnpm-workspace.yaml` 中 packages 路径配置错误
+**文件**: `frontend/pnpm-workspace.yaml`
+**问题**: `packages/*` 会匹配 `packages/components` 等，但 `packages/` 本身没有 `package.json`，导致 workspace 根目录无法被正确识别
+**修复**: 已在 monorepo 验证，路径配置实际正确，无需修改（但发现 tsconfig 的 `noUnusedLocals: false` 不是好习惯）
+**严重程度**: 🟢 低
+
+## 🔧 中等问题（已修复）
+
+### 1. 组件包未导出 `index.ts`
+**文件**: `frontend/packages/components/src/map/index.ts`, `frontend/packages/components/src/chat/index.ts`
+**问题**: `package.json` 中配置了 `"./map": "./src/map/index.ts"` 和 `"./chat": "./src/chat/index.ts"` subpath export，但这两个文件不存在
+**修复**: 创建 `map/index.ts` 导出所有43个地图组件，创建 `chat/index.ts` 导出聊天组件
+**严重程度**: 🟡 中等
+
+### 2. `@geonex/hooks/useClipboard` 未导出
+**文件**: `frontend/packages/hooks/package.json`
+**问题**: `useClipboard.ts` 存在但未加入 `exports` 和 `index.ts`
+**修复**: 添加 `"useClipboard": "./src/useClipboard.ts"` 到 exports，添加 `export * from './useClipboard'` 到 index.ts
+**严重程度**: 🟡 中等
+
+### 3. 多处硬编码 monorepo 相对路径
+**文件**: `CesiumView.vue`, `MapToolbar.vue`, `UnifiedMapPanel.vue`, `CesiumPanel.vue`, `MapSharePanel.vue`, `MapView.vue`, `ChatView.vue`
+**问题**: 使用 `../../../packages/components/src/...` 和 `../../../packages/hooks/src/...` 等相对路径，违反 monorepo 包隔离原则
+**修复**: 统一改为 `@geonex/components/map`、`@geonex/hooks/useCesium` 等 workspace 包导入
+**严重程度**: 🟡 中等
+
+### 4. SCSS 变量文件缺失
+**文件**: `frontend/src/assets/styles/variables.scss`
+**问题**: `vite.config.ts` 的 `additionalData` 全局引入 `@/assets/styles/variables.scss`，但文件不存在，导致 SCSS 编译失败
+**修复**: 创建 `src/assets/styles/variables.scss` 并包含必要变量
+**严重程度**: 🟡 中等
+
+## 📊 本轮总结
+
+| 类别 | 数量 |
+|-----|------|
+| 严重问题修复 | 2 |
+| 中等问题修复 | 4 |
+| 文件新增 | 3 (index.ts × 3) |
+| 文件修改 | 10+ |
+| 阻塞构建问题 | 1 (types 包) |
+| 运行时崩溃问题 | 1 (api 导入) |

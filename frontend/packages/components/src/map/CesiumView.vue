@@ -281,7 +281,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Viewer, Cesium3DTileset } from 'cesium'
-import { EffectManager } from '../../../packages/hooks/src/useCesium'
+import { EffectManager } from '@geonex/hooks/useCesium'
 
 const { t } = useI18n()
 
