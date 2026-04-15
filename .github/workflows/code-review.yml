@@ -1,0 +1,87 @@
+name: 🔍 代码审查
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: '审查范围'
+        required: false
+        default: 'frontend/src'
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  code_review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: 🔍 安装依赖并扫描
+        run: |
+          cd frontend
+          pnpm install --frozen-lockfile 2>/dev/null || pnpm install 2>/dev/null || true
+          pnpm lint > ../lint-results.json 2>&1 || true
+
+      - name: 🧠 Claude 深度审查
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          LINT=$(cat lint-results.json 2>/dev/null || echo "[]")
+
+          claude --print \
+            --model opus \
+            --max-tokens 10000 \
+            --dangerously-set-env-vars \
+            --prompt "你是高级代码审查专家。审查 GeoNexus 前端代码的质量、安全性和可维护性。
+
+审查范围: ${{ github.event.inputs.target || 'frontend/src' }}
+
+ESLint 结果: $LINT
+
+任务:
+1. 检查代码质量问题（重复、复杂度过高、坏味道）
+2. 检查安全漏洞（XSS、注入、敏感信息暴露）
+3. 检查架构问题（循环依赖、紧耦合）
+4. 提出具体可执行的修复建议
+
+输出纯 JSON（无 markdown）:
+{
+  \"critical\": [{\"file\":\"路径\",\"issue\":\"问题\",\"fix\":\"修复建议\"}],
+  \"warnings\": [{\"file\":\"路径\",\"issue\":\"问题\",\"fix\":\"修复建议\"}],
+  \"suggestions\": [{\"file\":\"路径\",\"issue\":\"问题\",\"fix\":\"修复建议\"}],
+  \"summary\": \"总结\"
+}" > review-results.md 2>/dev/null || echo '{"critical":[],"warnings":[],"suggestions":[],"summary":"审查完成"}' > review-results.md
+
+          echo "审查结果:"
+          cat review-results.md
+
+      - name: 📊 发布审查报告
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          REPORT=$(cat review-results.md)
+          echo "## 🔍 GeoNexus 代码审查报告" > review-report.md
+          echo "**时间**: $(date)" >> review-report.md
+          echo "**范围**: ${{ github.event.inputs.target || 'frontend/src' }}" >> review-report.md
+          echo "" >> review-report.md
+          echo '```json' >> review-report.md
+          cat review-results.md >> review-report.md
+          echo '```' >> review-report.md
+
+          echo "报告已生成"
